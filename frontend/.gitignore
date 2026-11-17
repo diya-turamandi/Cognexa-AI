@@ -1,24 +1,86 @@
-# Logs
-logs
-*.log
+
+# =====================================
+# NODE.JS / REACT
+# =====================================
+
+node_modules/
+dist/
+dist-ssr/
+*.local
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# =====================================
+# PYTHON / FASTAPI
+# =====================================
 
-# Editor directories and files
+__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+venv/
+env/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =====================================
+# ENVIRONMENT VARIABLES / SECRETS
+# =====================================
+
+.env
+.env.*
+!.env.example
+
+# =====================================
+# UPLOADED DOCUMENTS
+# =====================================
+
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+
+# =====================================
+# DATABASE / BACKUPS
+# =====================================
+
+*.db
+*.sqlite3
+*.dump
+*.backup
+
+# =====================================
+# LOGS
+# =====================================
+
+logs/
+*.log
+
+# =====================================
+# EDITORS
+# =====================================
+
 .vscode/*
 !.vscode/extensions.json
-.idea
+
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# =====================================
+# BUILD / TEMPORARY FILES
+# =====================================
+
+*.tmp
+*.bak
+*.swp

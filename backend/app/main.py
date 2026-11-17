@@ -2,39 +2,43 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.database import Base, engine
+from app import models
+
 from app.routes import documents
 
 
 app = FastAPI(
     title="Cognexa AI",
     description="Your AI-powered personal knowledge management system",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 
-# CORS configuration
+@app.on_event("startup")
+def initialize_database():
+    Base.metadata.create_all(bind=engine)
+
+
 app.add_middleware(
     CORSMiddleware,
-
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000"
     ],
-
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 
-# Register API routes
 app.include_router(documents.router)
 
 
 @app.get("/")
 def home():
     return {
-        "message": "Welcome to Cognexa AI Backend",
+        "message": "Welcome to Cognexa AI",
         "status": "running"
     }
 
