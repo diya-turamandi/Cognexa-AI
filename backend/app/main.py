@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import Base, engine
 from app import models
+from app.routes import chat
 
 from app.routes import documents
 
@@ -33,7 +34,7 @@ app.add_middleware(
 
 
 app.include_router(documents.router)
-
+app.include_router(chat.router)
 
 @app.get("/")
 def home():
