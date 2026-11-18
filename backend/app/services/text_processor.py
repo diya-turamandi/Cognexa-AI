@@ -7,28 +7,34 @@ def clean_text(text: str) -> str:
 
     text = text.replace("\x00", "")
 
+    # Remove unnecessary spaces and tabs
     text = re.sub(r"[ \t]+", " ", text)
 
+    # Reduce excessive blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
 
     return text.strip()
 
 
-def create_chunks(
-    pages,
-    chunk_size=1000,
-    overlap=150
-):
+def create_chunks(pages, chunk_size=1000, overlap=150):
     """
-    Create overlapping chunks while preserving
-    original page numbers and character positions.
+    Split PDF pages into smaller text chunks.
+
+    Each chunk stores:
+    - chunk_index
+    - content
+    - page_number
+    - start_index
+    - end_index
     """
 
     if chunk_size <= 0:
         raise ValueError("chunk_size must be positive")
 
     if overlap < 0 or overlap >= chunk_size:
-        raise ValueError("overlap must be smaller than chunk_size")
+        raise ValueError(
+            "overlap must be smaller than chunk_size"
+        )
 
     chunks = []
 
@@ -45,8 +51,9 @@ def create_chunks(
 
             end = min(start + chunk_size, len(text))
 
-            # Prefer ending at a paragraph or word boundary.
+            # Try to split at a natural text boundary
             if end < len(text):
+
                 boundary = max(
                     text.rfind("\n", start, end),
                     text.rfind(" ", start, end)
@@ -58,6 +65,7 @@ def create_chunks(
             content = text[start:end].strip()
 
             if content:
+
                 chunks.append({
                     "chunk_index": len(chunks),
                     "content": content,
