@@ -1,0 +1,22 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.*
+
+# Uploaded documents
+backend/uploads/
+uploads/
+
+# Local vector database
+backend/qdrant_data/
+qdrant_data/
+
+# Model cache
+.cache/
