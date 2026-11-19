@@ -1,7 +1,7 @@
 
 import os
-import httpx
 
+import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,26 +17,39 @@ OLLAMA_MODEL = os.getenv(
 )
 
 
-async def generate_answer(question: str, context: str):
+async def generate_answer(
+    question: str,
+    context: str,
+    history: str = "No previous conversation."
+):
 
     prompt = f"""
 You are Cognexa AI, an intelligent document assistant.
 
-Answer the user's question using ONLY the provided context.
+Your job is to answer questions using the uploaded document
+context and the conversation history.
 
-Rules:
-1. Do not invent information.
-2. If the answer is not in the context, say:
-   "I could not find this information in the uploaded documents."
-3. Give clear and structured answers.
-4. Cite sources using the page numbers provided.
-5. Be concise but informative.
+RULES:
+
+1. Use the document context as the primary source of factual information.
+2. Use conversation history to understand follow-up questions.
+3. Do not invent facts or information.
+4. If the answer is not available in the document context,
+   clearly say that you could not find it in the uploaded documents.
+5. Give clear and structured answers.
+6. Include page numbers when available.
+7. If the user asks a follow-up question, understand it
+   using the previous conversation.
+
+PREVIOUS CONVERSATION:
+
+{history}
 
 DOCUMENT CONTEXT:
 
 {context}
 
-USER QUESTION:
+CURRENT QUESTION:
 
 {question}
 
@@ -47,6 +60,7 @@ ANSWER:
 
         response = await client.post(
             f"{OLLAMA_BASE_URL}/api/generate",
+
             json={
                 "model": OLLAMA_MODEL,
                 "prompt": prompt,

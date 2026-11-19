@@ -1,11 +1,24 @@
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+
+from app.models import ChatSession
+
+from app.schemas.chat import ChatRequest, ChatResponse
+
+from app.services.chat_service import (
+    save_message,
+    get_chat_history,
+    format_chat_history,
+    update_session_title
+)
+
+from app.services.llm_service import generate_answer
 
 from rag.embeddings import generate_query_embedding
 from rag.vector_store import search_chunks
-
-from app.services.llm_service import generate_answer
 
 
 router = APIRouter(
@@ -14,53 +27,80 @@ router = APIRouter(
 )
 
 
-class ChatRequest(BaseModel):
+# ==========================================
+# CHAT WITH DOCUMENTS + HISTORY
+# ==========================================
 
-    question: str = Field(
-        min_length=2,
-        max_length=2000
-    )
-
-    document_id: str | None = None
-
-    top_k: int = Field(
-        default=5,
-        ge=1,
-        le=10
-    )
-
-
-@router.post("/")
-async def chat_with_documents(request: ChatRequest):
+@router.post("/", response_model=ChatResponse)
+async def chat_with_documents(
+    request: ChatRequest,
+    db: Session = Depends(get_db)
+):
 
     try:
 
-        # STEP 1: Generate question embedding
+        # ----------------------------------
+        # 1. FIND CHAT SESSION
+        # ----------------------------------
+
+        session = (
+            db.query(ChatSession)
+            .filter(ChatSession.id == request.session_id)
+            .first()
+        )
+
+        if not session:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Chat session not found"
+            )
+
+        # ----------------------------------
+        # 2. GET PREVIOUS CONVERSATION
+        # ----------------------------------
+
+        previous_messages = get_chat_history(
+            db=db,
+            session_id=session.id,
+            limit=10
+        )
+
+        history = format_chat_history(
+            previous_messages
+        )
+
+        # ----------------------------------
+        # 3. UPDATE SESSION TITLE
+        # ----------------------------------
+
+        update_session_title(
+            db=db,
+            session=session,
+            question=request.question
+        )
+
+        # ----------------------------------
+        # 4. GENERATE QUERY EMBEDDING
+        # ----------------------------------
 
         query_embedding = generate_query_embedding(
             request.question
         )
 
-        # STEP 2: Retrieve relevant chunks
+        # ----------------------------------
+        # 5. SEARCH QDRANT
+        # ----------------------------------
 
         results = search_chunks(
             query_embedding=query_embedding,
             limit=request.top_k,
-            document_id=request.document_id
+            document_id=session.document_id
         )
 
-        if not results:
-
-            return {
-                "success": True,
-                "answer": (
-                    "I could not find relevant information "
-                    "in the uploaded documents."
-                ),
-                "sources": []
-            }
-
-        # STEP 3: Prepare document context
+        # ----------------------------------
+        # 6. PREPARE DOCUMENT CONTEXT
+        # ----------------------------------
 
         context_parts = []
 
@@ -68,43 +108,101 @@ async def chat_with_documents(request: ChatRequest):
 
         for result in results:
 
+            filename = result.get("filename")
+            page = result.get("page")
+            content = result.get("text", "")
+
             context_parts.append(
                 f"""
-Filename: {result.get('filename')}
-Page: {result.get('page')}
+Filename: {filename}
+Page: {page}
 
 Content:
-{result.get('text')}
+{content}
 """
             )
 
             sources.append({
-                "filename": result.get("filename"),
-                "page": result.get("page"),
+                "filename": filename,
+                "page": page,
                 "chunk_index": result.get("chunk_index"),
                 "score": result.get("score"),
-                "content": result.get("text")
+                "content": content
             })
 
-        context = "\n\n".join(context_parts)
+        if context_parts:
 
-        # STEP 4: Generate answer using Ollama
+            context = "\n\n".join(context_parts)
+
+        else:
+
+            context = (
+                "No relevant information was found "
+                "in the uploaded documents."
+            )
+
+        # ----------------------------------
+        # 7. GENERATE AI ANSWER
+        # ----------------------------------
 
         answer = await generate_answer(
             question=request.question,
-            context=context
+            context=context,
+            history=history
         )
 
-        # STEP 5: Return response
+        # ----------------------------------
+        # 8. SAVE USER MESSAGE
+        # ----------------------------------
+
+        save_message(
+            db=db,
+            session_id=session.id,
+            role="user",
+            content=request.question
+        )
+
+        # ----------------------------------
+        # 9. SAVE AI RESPONSE
+        # ----------------------------------
+
+        save_message(
+            db=db,
+            session_id=session.id,
+            role="assistant",
+            content=answer
+        )
+
+        # ----------------------------------
+        # 10. UPDATE SESSION TIMESTAMP
+        # ----------------------------------
+
+        from sqlalchemy import func
+
+        session.updated_at = func.now()
+
+        # ----------------------------------
+        # 11. COMMIT CONVERSATION
+        # ----------------------------------
+
+        db.commit()
 
         return {
             "success": True,
+            "session_id": session.id,
             "question": request.question,
             "answer": answer,
             "sources": sources
         }
 
+    except HTTPException:
+
+        db.rollback()
+        raise
+
     except Exception as e:
+
+        db.rollback()
 
         raise HTTPException(
             status_code=500,
