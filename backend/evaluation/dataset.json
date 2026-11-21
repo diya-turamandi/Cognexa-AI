@@ -1,0 +1,12 @@
+[
+    {
+        "document_id": "f838dab3-8b6a-4a98-9072-1e6b91cbcccd",
+        "question": "list the skills",
+        "ground_truth": "Based on the document context, the skills listed by Diya Turamandi are:\n\n**Programming Skills:**\n- Python\n- Java\n- C\n\n**Frontend Skills:**\n- HTML\n- CSS\n- JavaScript\n- React.js\n- Bootstrap\n- Tailwind CSS\n\n**Backend Skills:**\n- Node.js\n- Express.js\n- REST APIs\n- MySQL\n- MongoDB\n\n**Artificial Intelligence/ Machine Learning Skills:**\n- Machine Learning\n- TensorFlow\n- OpenCV\n- Scikit-learn\n- Pandas\n- NumPy\n\n**Developer Tools:**\n- Git\n- GitHub\n- Figma\n- Canva\n- Salesforce."
+    },
+    {
+        "document_id": "f31ec24a-32c8-4a8c-a480-238e56e45ef7",
+        "question": "give short summary",
+        "ground_truth": "Based on the document context, I can provide a summary of the topic.\n\nThe document appears to be related to information security and vulnerability assessment. It outlines various aspects of vulnerability assessment, including compliance checking, reporting and documentation, remediation recommendations, and continuous improvement.\n\nThe document also discusses the importance of digital data and information processing, as well as the components of an information system, including people, data, and processes.\n\nAdditionally, it highlights various mobile application vulnerabilities, such as insecure data storage, insecure communication, and others.\n\nPlease let me know if you would like me to expand on this summary or answer any follow-up questions."
+    }
+]

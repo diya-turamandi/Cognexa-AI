@@ -1,12 +1,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.core.database import get_db
-
 from app.models import ChatSession
-
 from app.schemas.chat import ChatRequest, ChatResponse
+
+from app.services.reranker import rerank_chunks
 
 from app.services.chat_service import (
     save_message,
@@ -16,9 +17,7 @@ from app.services.chat_service import (
 )
 
 from app.services.llm_service import generate_answer
-
-from rag.embeddings import generate_query_embedding
-from rag.vector_store import search_chunks
+from rag.hybrid_search import hybrid_search
 
 
 router = APIRouter(
@@ -39,9 +38,7 @@ async def chat_with_documents(
 
     try:
 
-        # ----------------------------------
         # 1. FIND CHAT SESSION
-        # ----------------------------------
 
         session = (
             db.query(ChatSession)
@@ -50,15 +47,12 @@ async def chat_with_documents(
         )
 
         if not session:
-
             raise HTTPException(
                 status_code=404,
                 detail="Chat session not found"
             )
 
-        # ----------------------------------
         # 2. GET PREVIOUS CONVERSATION
-        # ----------------------------------
 
         previous_messages = get_chat_history(
             db=db,
@@ -66,13 +60,9 @@ async def chat_with_documents(
             limit=10
         )
 
-        history = format_chat_history(
-            previous_messages
-        )
+        history = format_chat_history(previous_messages)
 
-        # ----------------------------------
         # 3. UPDATE SESSION TITLE
-        # ----------------------------------
 
         update_session_title(
             db=db,
@@ -80,30 +70,31 @@ async def chat_with_documents(
             question=request.question
         )
 
-        # ----------------------------------
-        # 4. GENERATE QUERY EMBEDDING
-        # ----------------------------------
+        # 4. HYBRID SEARCH - RETRIEVE 20 CANDIDATES
 
-        query_embedding = generate_query_embedding(
-            request.question
+        candidates = hybrid_search(
+            db=db,
+            query=request.question,
+            document_id=session.document_id,
+            limit=20,
+            candidate_limit=20
         )
 
-        # ----------------------------------
-        # 5. SEARCH QDRANT
-        # ----------------------------------
+        print(f"Hybrid search retrieved {len(candidates)} candidates")
 
-        results = search_chunks(
-            query_embedding=query_embedding,
-            limit=request.top_k,
-            document_id=session.document_id
+        # 5. CROSS-ENCODER RERANKING - TOP 5
+
+        results = rerank_chunks(
+            query=request.question,
+            documents=candidates,
+            top_k=5
         )
 
-        # ----------------------------------
+        print(f"Cross-Encoder selected {len(results)} chunks")
+
         # 6. PREPARE DOCUMENT CONTEXT
-        # ----------------------------------
 
         context_parts = []
-
         sources = []
 
         for result in results:
@@ -126,24 +117,19 @@ Content:
                 "filename": filename,
                 "page": page,
                 "chunk_index": result.get("chunk_index"),
-                "score": result.get("score"),
+                "score": result.get("rerank_score"),
                 "content": content
             })
 
         if context_parts:
-
             context = "\n\n".join(context_parts)
-
         else:
-
             context = (
                 "No relevant information was found "
                 "in the uploaded documents."
             )
 
-        # ----------------------------------
-        # 7. GENERATE AI ANSWER
-        # ----------------------------------
+        # 7. GENERATE AI ANSWER USING OLLAMA
 
         answer = await generate_answer(
             question=request.question,
@@ -151,9 +137,7 @@ Content:
             history=history
         )
 
-        # ----------------------------------
         # 8. SAVE USER MESSAGE
-        # ----------------------------------
 
         save_message(
             db=db,
@@ -162,9 +146,7 @@ Content:
             content=request.question
         )
 
-        # ----------------------------------
         # 9. SAVE AI RESPONSE
-        # ----------------------------------
 
         save_message(
             db=db,
@@ -173,17 +155,11 @@ Content:
             content=answer
         )
 
-        # ----------------------------------
         # 10. UPDATE SESSION TIMESTAMP
-        # ----------------------------------
-
-        from sqlalchemy import func
 
         session.updated_at = func.now()
 
-        # ----------------------------------
         # 11. COMMIT CONVERSATION
-        # ----------------------------------
 
         db.commit()
 
@@ -196,12 +172,10 @@ Content:
         }
 
     except HTTPException:
-
         db.rollback()
         raise
 
     except Exception as e:
-
         db.rollback()
 
         raise HTTPException(
